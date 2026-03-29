@@ -1,1 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Transport Weekly Meta V23</title>
+    <style>
+        body { background: #000; color: #0f0; font-family: 'Courier New', monospace; padding: 20px; }
+        .terminal { border: 2px solid #0f0; padding: 20px; max-width: 600px; margin: auto; }
+        button { width: 100%; padding: 15px; background: #080; color: #fff; border: none; cursor: pointer; font-weight: bold; margin: 10px 0; }
+        .day-row { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #222; }
+        .best { color: #0f0; font-weight: bold; } /* Cheapest Lows */
+        .worst { color: #f00; font-weight: bold; } /* Highest Highs */
+        #log { font-size: 0.8em; color: #006600; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="terminal">
+        <h2 style="text-align:center">TRANSPORT WEEKLY META</h2>
+        <input type="date" id="s" style="width:45%; background:#000; color:#0f0; border:1px solid #0f0;">
+        <input type="date" id="e" style="width:45%; background:#000; color:#0f0; border:1px solid #0f0;">
+        <button onclick="run()">EXTRACT BEST/WORST DAYS</button>
+        
+        <div id="results"></div>
+        <div id="log">Status: Ready. (Check CORS Extension)</div>
+    </div>
 
+<script>
+    async function run() {
+        const log = document.getElementById('log');
+        const s = document.getElementById('s').value;
+        const e = document.getElementById('e').value;
+        if(!s || !e) return alert("Dates, please.");
+
+        const url = "https://api.simcotools.com/v1/realms/0/market/resources/13/0/candlesticks";
+        
+        try {
+            const res = await fetch(url);
+            const raw = await res.json();
+            const data = Array.isArray(raw) ? raw : (raw.data || raw.candlesticks);
+
+            const sTs = new Date(s).getTime();
+            const eTs = new Date(e).setHours(23,59,59);
+
+            const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const stats = {};
+            days.forEach(d => stats[d] = { h: [], l: [] });
+
+            data.forEach(d => {
+                const ts = new Date(d.time || d.date).getTime();
+                if(ts >= sTs && ts <= eTs) {
+                    const name = days[new Date(ts).getUTCDay()];
+                    stats[name].h.push(parseFloat(d.high));
+                    stats[name].l.push(parseFloat(d.low));
+                }
+            });
+
+            let bestDay = "", worstDay = "", minL = 999, maxH = 0;
+            days.forEach(d => {
+                if(stats[d].h.length > 0) {
+                    const avgL = stats[d].l.reduce((a,b)=>a+b) / stats[d].l.length;
+                    const avgH = stats[d].h.reduce((a,b)=>a+b) / stats[d].h.length;
+                    if(avgL < minL) { minL = avgL; bestDay = d; }
+                    if(avgH > maxH) { maxH = avgH; worstDay = d; }
+                }
+            });
+
+            let html = `<div style="margin-top:20px">
+                <div class="day-row best"><span>BEST DAY TO BUY:</span> <span>${bestDay} ($${minL.toFixed(4)})</span></div>
+                <div class="day-row worst"><span>BEST DAY TO SELL:</span> <span>${worstDay} ($${maxH.toFixed(4)})</span></div>
+            </div><hr style="border:0; border-top:1px solid #333; margin:15px 0;">`;
+
+            days.forEach(d => {
+                if(stats[d].h.length > 0) {
+                    const avgL = stats[d].l.reduce((a,b)=>a+b) / stats[d].l.length;
+                    const avgH = stats[d].h.reduce((a,b)=>a+b) / stats[d].h.length;
+                    html += `<div class="day-row"><span>${d}</span> <span>L: $${avgL.toFixed(4)} / H: $${avgH.toFixed(4)}</span></div>`;
+                }
+            });
+
+            document.getElementById('results').innerHTML = html;
+            log.innerText = "Weekly Meta Extracted.";
+
+        } catch (err) { log.innerText = "Error: " + err.message; }
+    }
+</script>
+</body>
+</html>
